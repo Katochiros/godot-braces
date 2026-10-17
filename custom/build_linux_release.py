@@ -64,18 +64,30 @@ def main():
     os.environ.setdefault("GODOT_VERSION_STATUS", "braces")
     status = os.environ["GODOT_VERSION_STATUS"]
 
-    branch = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=src,
-                            capture_output=True, text=True).stdout.strip() or "no git"
+    branch = (
+        subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=src, capture_output=True, text=True
+        ).stdout.strip()
+        or "no git"
+    )
     print(f"Source: {src} ({branch})")
     print(f"Jobs:   {compile_jobs} compile, {link_jobs} link")
 
-    common = ["scons", "platform=linuxbsd", "arch=x86_64", "production=yes", f"-j{compile_jobs}", f"lto_jobs={link_jobs}"]
+    common = [
+        "scons",
+        "platform=linuxbsd",
+        "arch=x86_64",
+        "production=yes",
+        f"-j{compile_jobs}",
+        f"lto_jobs={link_jobs}",
+    ]
     for target in ("editor", "template_release", "template_debug"):
         subprocess.run(common + [f"target={target}"], cwd=src, check=True)
 
     # Template folder name must match the editor's version string, e.g. 4.7.2.braces
     sys.path.insert(0, str(src))
     import version
+
     patch = f".{version.patch}" if version.patch else ""
     ver = f"{version.major}.{version.minor}{patch}.{status}"
 
