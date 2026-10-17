@@ -1,0 +1,201 @@
+name: 📦 Release Builds
+# Production (LTO) builds of the Linux and Windows editors and export templates, plus a .tpz
+# the editor can install via "Manage Export Templates > Install from File". Runs when a tag
+# starting with "braces-v" is pushed, e.g. braces-v4.7.2-1.
+on:
+  push:
+    tags: ["braces-v*"]
+
+# Global Settings
+env:
+  SCONS_FLAGS: >-
+    production=yes
+    debug_symbols=no
+  # Version status suffix, must match local builds (e.g. 4.7.2.braces).
+  GODOT_VERSION_STATUS: braces
+  PYTHONIOENCODING: utf8
+
+jobs:
+  build-linux:
+    # Stay one LTS before latest to increase portability of Linux artifacts.
+    runs-on: ubuntu-22.04
+    name: 🐧 Linux ${{ matrix.target }}
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [editor, template_release, template_debug]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Setup dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install libwayland-bin  # TODO: Figure out somehow how to embed this one.
+
+      - name: Setup Python and SCons
+        uses: ./.github/actions/godot-deps
+
+      - name: Download pre-built AccessKit
+        shell: sh
+        id: accesskit-sdk
+        run: |
+          if python ./misc/scripts/install_accesskit.py; then
+            echo "ACCESSKIT_ENABLED=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::AccessKit SDK installation failed, building without AccessKit support."
+            echo "ACCESSKIT_ENABLED=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Runners have 16 GB RAM and each GCC LTO link job needs ~4.3 GB.
+      - name: Compilation
+        uses: ./.github/actions/godot-build
+        with:
+          scons-flags: ${{ env.SCONS_FLAGS }} lto_jobs=2 accesskit=${{ steps.accesskit-sdk.outputs.ACCESSKIT_ENABLED }}
+          platform: linuxbsd
+          target: ${{ matrix.target }}
+
+      - name: Prepare artifact
+        run: |
+          rm -rf ./bin/build_deps ./bin/obj
+          strip bin/godot.*
+          chmod +x bin/godot.*
+
+      - name: Upload artifact
+        uses: ./.github/actions/upload-artifact
+        with:
+          name: linux-${{ matrix.target }}
+
+  build-windows:
+    runs-on: windows-latest
+    name: 🏁 Windows ${{ matrix.target }}
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [editor, template_release, template_debug]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Setup Python and SCons
+        uses: ./.github/actions/godot-deps
+
+      - name: Download Direct3D 12 SDK components
+        shell: sh
+        id: d3d12-sdk
+        run: |
+          if python ./misc/scripts/install_d3d12_sdk_windows.py; then
+            echo "D3D12_ENABLED=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Windows: Direct3D 12 SDK installation failed, building without Direct3D 12 support."
+            echo "D3D12_ENABLED=no" >> "$GITHUB_OUTPUT"
+          fi
+        continue-on-error: true
+
+      - name: Download pre-built ANGLE
+        shell: sh
+        id: angle-sdk
+        run: |
+          if python ./misc/scripts/install_angle.py; then
+            echo "ANGLE_ENABLED=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::ANGLE SDK installation failed, building without ANGLE support."
+            echo "ANGLE_ENABLED=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download WinRT components
+        shell: sh
+        run: python ./misc/scripts/install_winrt.py
+        continue-on-error: true
+
+      - name: Download pre-built AccessKit
+        shell: sh
+        id: accesskit-sdk
+        run: |
+          if python ./misc/scripts/install_accesskit.py; then
+            echo "ACCESSKIT_ENABLED=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::AccessKit SDK installation failed, building without AccessKit support."
+            echo "ACCESSKIT_ENABLED=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compilation
+        uses: ./.github/actions/godot-build
+        with:
+          scons-flags: ${{ env.SCONS_FLAGS }} d3d12=${{ steps.d3d12-sdk.outputs.D3D12_ENABLED }} accesskit=${{ steps.accesskit-sdk.outputs.ACCESSKIT_ENABLED }} angle=${{ steps.angle-sdk.outputs.ANGLE_ENABLED }}
+          platform: windows
+          target: ${{ matrix.target }}
+
+      - name: Prepare artifact
+        run: |
+          Remove-Item bin/build_deps,bin/obj -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item bin/* -Include *.exp,*.lib,*.pdb -Force
+
+      - name: Upload artifact
+        uses: ./.github/actions/upload-artifact
+        with:
+          name: windows-${{ matrix.target }}
+
+  package:
+    runs-on: ubuntu-latest
+    name: 📦 Package
+    needs: [build-linux, build-windows]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      # Template file names are what the editor's export plugins look for.
+      - name: Assemble export templates and editors
+        run: |
+          ver=$(python3 -c "import version; print(f'{version.major}.{version.minor}' + (f'.{version.patch}' if version.patch else '') + '.$GODOT_VERSION_STATUS')")
+          echo "VERSION=$ver" >> "$GITHUB_ENV"
+          a=artifacts
+
+          mkdir -p templates
+          cp $a/linux-template_release/godot.linuxbsd.template_release.x86_64 templates/linux_release.x86_64
+          cp $a/linux-template_debug/godot.linuxbsd.template_debug.x86_64 templates/linux_debug.x86_64
+          cp $a/windows-template_release/godot.windows.template_release.x86_64.exe templates/windows_release_x86_64.exe
+          cp $a/windows-template_release/godot.windows.template_release.x86_64.console.exe templates/windows_release_x86_64_console.exe
+          cp $a/windows-template_debug/godot.windows.template_debug.x86_64.exe templates/windows_debug_x86_64.exe
+          cp $a/windows-template_debug/godot.windows.template_debug.x86_64.console.exe templates/windows_debug_x86_64_console.exe
+          chmod +x templates/linux_*
+          echo "$ver" > templates/version.txt
+          zip -r "Godot_v${ver}_export_templates.tpz" templates
+
+          mkdir -p editor-linux editor-windows
+          cp $a/linux-editor/godot.linuxbsd.editor.x86_64 "editor-linux/Godot_v${ver}_linux.x86_64"
+          chmod +x editor-linux/*
+          cp $a/windows-editor/godot.windows.editor.x86_64.exe "editor-windows/Godot_v${ver}_win64.exe"
+          cp $a/windows-editor/godot.windows.editor.x86_64.console.exe "editor-windows/Godot_v${ver}_win64_console.exe"
+
+      - name: Upload export templates
+        uses: ./.github/actions/upload-artifact
+        with:
+          name: Godot_v${{ env.VERSION }}_export_templates
+          path: Godot_v${{ env.VERSION }}_export_templates.tpz
+
+      - name: Upload Linux editor
+        uses: ./.github/actions/upload-artifact
+        with:
+          name: Godot_v${{ env.VERSION }}_linux.x86_64
+          path: editor-linux/*
+
+      - name: Upload Windows editor
+        uses: ./.github/actions/upload-artifact
+        with:
+          name: Godot_v${{ env.VERSION }}_win64
+          path: editor-windows/*

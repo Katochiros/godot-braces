@@ -48,6 +48,7 @@ def get_opts():
     return [
         EnumVariable("linker", "Linker program", "default", ["default", "bfd", "gold", "lld", "mold"], ignorecase=2),
         BoolVariable("use_llvm", "Use the LLVM compiler", False),
+        ("lto_jobs", "Parallel LTO link jobs with GCC (0: same as -j)", "0"),
         BoolVariable("use_static_cpp", "Link libgcc and libstdc++ statically for better portability", True),
         BoolVariable("use_coverage", "Test Godot coverage", False),
         BoolVariable("use_ubsan", "Use LLVM/GCC compiler undefined behavior sanitizer (UBSAN)", False),
@@ -218,9 +219,9 @@ def configure(env: "SConsEnvironment"):
                 sys.exit(255)
             env.Append(CCFLAGS=["-flto=thin"])
             env.Append(LINKFLAGS=["-flto=thin"])
-        elif not env["use_llvm"] and env.GetOption("num_jobs") > 1:
+        elif not env["use_llvm"] and (int(env["lto_jobs"]) or env.GetOption("num_jobs")) > 1:
             env.Append(CCFLAGS=["-flto"])
-            env.Append(LINKFLAGS=["-flto=" + str(env.GetOption("num_jobs"))])
+            env.Append(LINKFLAGS=["-flto=" + str(int(env["lto_jobs"]) or env.GetOption("num_jobs"))])
         else:
             env.Append(CCFLAGS=["-flto"])
             env.Append(LINKFLAGS=["-flto"])
