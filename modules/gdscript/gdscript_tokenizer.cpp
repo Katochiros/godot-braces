@@ -1138,7 +1138,7 @@ void GDScriptTokenizerText::check_indent() {
 		if (current_indent_char != ' ' && current_indent_char != '\t' && current_indent_char != '\r' && current_indent_char != '\n' && current_indent_char != '#') {
 			// First character of the line is not whitespace, so we clear all indentation levels.
 			// Unless we are in a continuation or in multiline mode (inside expression).
-			if (line_continuation || multiline_mode) {
+			if (line_continuation || multiline_mode || brace_mode) {
 				return;
 			}
 			pending_indents -= indent_level();
@@ -1219,14 +1219,14 @@ void GDScriptTokenizerText::check_indent() {
 			continue;
 		}
 
-		if (mixed && !line_continuation && !multiline_mode) {
+		if (mixed && !line_continuation && !multiline_mode && !brace_mode) {
 			Token error = make_error("Mixed use of tabs and spaces for indentation.");
 			error.start_line = line;
 			error.start_column = 1;
 			push_error(error);
 		}
 
-		if (line_continuation || multiline_mode) {
+		if (line_continuation || multiline_mode || brace_mode) {
 			// We cleared up all the whitespace at the beginning of the line.
 			// If this is a line continuation or we're in multiline mode then we don't want any indentation changes.
 			return;
@@ -1357,8 +1357,8 @@ GDScriptTokenizer::Token GDScriptTokenizerText::scan() {
 
 	if (pending_newline) {
 		pending_newline = false;
-		if (!multiline_mode) {
-			// Don't return newline tokens on multiline mode.
+		if (!multiline_mode && !brace_mode) {
+			// Don't return newline tokens on multiline mode (or in brace mode, where newlines are plain whitespace).
 			return last_newline;
 		}
 	}

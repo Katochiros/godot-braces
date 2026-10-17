@@ -587,6 +587,8 @@ public:
 	virtual void init() override;
 	virtual String get_type() const override;
 	virtual String get_extension() const override;
+	// Source extensions: "gd" (indentation syntax) and "gdb" (C-like brace syntax).
+	static bool is_source_extension(const String &p_extension) { return p_extension == "gd" || p_extension == "gdb"; }
 	virtual void finish() override;
 
 	/* EDITOR FUNCTIONS */

@@ -463,6 +463,7 @@ String GDScriptLanguage::debug_parse_stack_level_expression(int p_level, const S
 
 void GDScriptLanguage::get_recognized_extensions(List<String> *p_extensions) const {
 	p_extensions->push_back("gd");
+	p_extensions->push_back("gdb"); // C-like brace syntax.
 }
 
 void GDScriptLanguage::get_public_functions(List<MethodInfo> *p_functions) const {
@@ -1180,7 +1181,7 @@ static void _list_available_types(bool p_inherit_only, GDScriptParser::Completio
 
 	for (const KeyValue<StringName, ProjectSettings::AutoloadInfo> &E : autoloads) {
 		const ProjectSettings::AutoloadInfo &info = E.value;
-		if (!info.is_singleton || !info.path.has_extension("gd")) {
+		if (!info.is_singleton || !GDScriptLanguage::is_source_extension(info.path.get_extension())) {
 			continue;
 		}
 		ScriptLanguage::CodeCompletionOption option(info.name, ScriptLanguage::CODE_COMPLETION_KIND_CLASS, ScriptLanguage::LOCATION_OTHER_USER_CODE);
@@ -2802,6 +2803,10 @@ static void _find_last_return_in_block(GDScriptParser::CompletionContext &p_cont
 				break;
 			case GDScriptParser::Node::WHILE:
 				c.current_suite = static_cast<const GDScriptParser::WhileNode *>(p_context.current_suite->statements[i])->loop;
+				_find_last_return_in_block(c, r_last_return_line, r_last_returned_value);
+				break;
+			case GDScriptParser::Node::SUITE:
+				c.current_suite = static_cast<GDScriptParser::SuiteNode *>(p_context.current_suite->statements[i]);
 				_find_last_return_in_block(c, r_last_return_line, r_last_returned_value);
 				break;
 			case GDScriptParser::Node::IF: {

@@ -288,12 +288,16 @@ String ScriptCreateDialog::_validate_path(const String &p_path, bool p_file_must
 		ScriptServer::get_language(l)->get_recognized_extensions(&extensions);
 	}
 
+	// A language can accept more than its default extension (e.g. GDScript's "gdb" brace syntax).
+	List<String> selected_extensions;
+	ScriptServer::get_language(language_menu->get_selected())->get_recognized_extensions(&selected_extensions);
+
 	bool found = false;
 	bool match = false;
 	for (const String &E : extensions) {
 		if (E.nocasecmp_to(extension) == 0) {
 			found = true;
-			if (E == ScriptServer::get_language(language_menu->get_selected())->get_extension()) {
+			if (selected_extensions.find(E)) {
 				match = true;
 			}
 			break;

@@ -329,11 +329,20 @@ void EditorFileSystem::_first_scan_filesystem() {
 	List<String> gdextension_extensions;
 	ResourceLoader::get_recognized_extensions_for_type("GDExtension", &gdextension_extensions);
 
+	HashSet<String> script_extensions;
+	for (int i = 0; i < ScriptServer::get_language_count(); i++) {
+		List<String> language_extensions;
+		ScriptServer::get_language(i)->get_recognized_extensions(&language_extensions);
+		for (const String &language_extension : language_extensions) {
+			script_extensions.insert(language_extension.to_lower());
+		}
+	}
+
 	// This loads the global class names from the scripts and ensures that even if the
 	// global_script_class_cache.cfg was missing or invalid, the global class names are valid in ScriptServer.
 	// At the same time, to prevent looping multiple times in all files, it looks for extensions.
 	ep.step(TTR("Loading global class names..."), 1, true);
-	_first_scan_process_scripts(first_scan_root_dir, gdextension_extensions, existing_class_names, extensions);
+	_first_scan_process_scripts(first_scan_root_dir, script_extensions, gdextension_extensions, existing_class_names, extensions);
 
 	// Removing invalid global class to prevent having invalid paths in ScriptServer.
 	bool save_scripts = _remove_invalid_global_class_names(existing_class_names);
@@ -362,9 +371,9 @@ void EditorFileSystem::_first_scan_filesystem() {
 	ep.step(TTR("Starting file scan..."), 5, true);
 }
 
-void EditorFileSystem::_first_scan_process_scripts(const ScannedDirectory *p_scan_dir, List<String> &p_gdextension_extensions, HashSet<String> &p_existing_class_names, HashSet<String> &p_extensions) {
+void EditorFileSystem::_first_scan_process_scripts(const ScannedDirectory *p_scan_dir, const HashSet<String> &p_script_extensions, List<String> &p_gdextension_extensions, HashSet<String> &p_existing_class_names, HashSet<String> &p_extensions) {
 	for (ScannedDirectory *scan_sub_dir : p_scan_dir->subdirs) {
-		_first_scan_process_scripts(scan_sub_dir, p_gdextension_extensions, p_existing_class_names, p_extensions);
+		_first_scan_process_scripts(scan_sub_dir, p_script_extensions, p_gdextension_extensions, p_existing_class_names, p_extensions);
 	}
 
 	for (const String &scan_file : p_scan_dir->files) {
@@ -372,14 +381,9 @@ void EditorFileSystem::_first_scan_process_scripts(const ScannedDirectory *p_sca
 		// that are not scripts. Some loader get_resource_type methods read the file
 		// which can be very slow on large projects.
 		const String ext = scan_file.get_extension().to_lower();
-		bool is_script = false;
-		for (int i = 0; i < ScriptServer::get_language_count(); i++) {
-			if (ScriptServer::get_language(i)->get_extension() == ext) {
-				is_script = true;
-				break;
-			}
-		}
-		if (is_script) {
+		// Use every recognized extension, not only get_extension(), so secondary
+		// source extensions (e.g. GDScript's ".gdb") get their class names registered.
+		if (p_script_extensions.has(ext)) {
 			const String path = p_scan_dir->full_path.path_join(scan_file);
 			const String type = ResourceLoader::get_resource_type(path);
 

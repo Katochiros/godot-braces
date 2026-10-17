@@ -244,6 +244,7 @@ class GDScriptTokenizerText : public GDScriptTokenizer {
 	// Info cache.
 	bool line_continuation = false; // Whether this line is a continuation of the previous, like when using '\'.
 	bool multiline_mode = false;
+	bool brace_mode = false; // Braces/semicolons syntax: never emit NEWLINE/INDENT/DEDENT, indentation is ignored.
 	List<Token> error_stack;
 	bool pending_newline = false;
 	Token last_token;
@@ -297,6 +298,7 @@ class GDScriptTokenizerText : public GDScriptTokenizer {
 
 public:
 	void set_source_code(const String &p_source_code);
+	void set_brace_mode(bool p_enabled) { brace_mode = p_enabled; }
 
 	const Vector<int> &get_continuation_lines() const { return continuation_lines; }
 

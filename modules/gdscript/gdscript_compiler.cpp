@@ -2003,6 +2003,13 @@ Error GDScriptCompiler::_parse_block(CodeGen &codegen, const GDScriptParser::Sui
 
 				codegen.end_block(); // Get out of extra block for match's @special locals.
 			} break;
+			case GDScriptParser::Node::SUITE: {
+				// Nested block (brace syntax).
+				err = _parse_block(codegen, static_cast<const GDScriptParser::SuiteNode *>(s));
+				if (err) {
+					return err;
+				}
+			} break;
 			case GDScriptParser::Node::IF: {
 				const GDScriptParser::IfNode *if_n = static_cast<const GDScriptParser::IfNode *>(s);
 				GDScriptCodeGenerator::Address condition = _parse_expression(codegen, err, if_n->condition);

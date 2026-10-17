@@ -1405,6 +1405,7 @@ private:
 	List<CompletionCall> completion_call_stack;
 	bool in_lambda = false;
 	bool lambda_ended = false; // Marker for when a lambda ends, to apply an end of statement if needed.
+	bool brace_mode = false; // C-like syntax ("*.gdb" files): blocks use "{ }", statements end with ";", indentation is ignored.
 
 	typedef bool (GDScriptParser::*AnnotationAction)(AnnotationNode *p_annotation, Node *p_target, ClassNode *p_class);
 	struct AnnotationInfo {
@@ -1535,6 +1536,8 @@ private:
 	bool is_statement_end_token() const;
 	bool is_statement_end() const;
 	void end_statement(const String &p_context);
+	void consume_block_header_colon(const String &p_error_message);
+	bool match_line_end();
 	void synchronize();
 	void push_multiline(bool p_state);
 	void pop_multiline();
@@ -1553,6 +1556,8 @@ private:
 	FunctionNode *parse_function(bool p_is_static);
 	bool parse_function_signature(FunctionNode *p_function, SuiteNode *p_body, const String &p_type, int p_signature_start);
 	SuiteNode *parse_suite(const String &p_context, SuiteNode *p_suite = nullptr, bool p_for_lambda = false);
+	SuiteNode *parse_brace_suite(const String &p_context, SuiteNode *p_suite);
+	void register_suite_local(Node *p_statement);
 	// Annotations
 	AnnotationNode *parse_annotation(uint32_t p_valid_targets);
 	static bool register_annotation(const MethodInfo &p_info, uint32_t p_target_kinds, AnnotationAction p_apply, const Vector<Variant> &p_default_arguments = Vector<Variant>(), bool p_is_vararg = false);
@@ -1629,6 +1634,7 @@ private:
 #endif // TOOLS_ENABLED
 
 public:
+	static bool is_brace_syntax_path(const String &p_path) { return p_path.get_extension().to_lower() == "gdb"; }
 	Error parse(const String &p_source_code, const String &p_script_path, bool p_for_completion, bool p_parse_body = true);
 	Error parse_binary(const Vector<uint8_t> &p_binary, const String &p_script_path);
 	ClassNode *get_tree() const { return head; }
