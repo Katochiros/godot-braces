@@ -1172,7 +1172,7 @@ const Vector<uint8_t> &GDScript::get_binary_tokens_source() const {
 
 Vector<uint8_t> GDScript::get_as_binary_tokens() const {
 	GDScriptTokenizerBuffer tokenizer;
-	return tokenizer.parse_code_string(source, GDScriptTokenizerBuffer::COMPRESS_NONE);
+	return tokenizer.parse_code_string(source, GDScriptTokenizerBuffer::COMPRESS_NONE, GDScriptParser::is_brace_syntax_path(path));
 }
 
 const HashMap<StringName, GDScriptFunction *> &GDScript::debug_get_member_functions() const {

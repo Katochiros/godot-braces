@@ -40,6 +40,7 @@ public:
 	};
 
 	static constexpr uint32_t TOKENIZER_VERSION = 101;
+	static constexpr uint32_t BRACE_SYNTAX_FLAG = 1u << 31; // Set in the header version for C-like brace syntax ("*.gdb") scripts.
 	static constexpr uint32_t TOKEN_BYTE_MASK = 0x80;
 	static constexpr uint32_t TOKEN_BITS = 8;
 	static constexpr uint32_t TOKEN_MASK = (1 << (TOKEN_BITS - 1)) - 1;
@@ -58,6 +59,7 @@ public:
 	List<List<int>> indent_stack_stack; // For lambdas, which require manipulating the indentation point.
 	int pending_indents = 0;
 	bool last_token_was_newline = false;
+	bool brace_syntax = false; // Never synthesize NEWLINE/INDENT/DEDENT tokens, like GDScriptTokenizerText in brace mode.
 
 #ifdef TOOLS_ENABLED
 	HashMap<int, CommentData> dummy;
@@ -68,7 +70,7 @@ public:
 
 public:
 	Error set_code_buffer(const Vector<uint8_t> &p_buffer);
-	static Vector<uint8_t> parse_code_string(const String &p_code, CompressMode p_compress_mode);
+	static Vector<uint8_t> parse_code_string(const String &p_code, CompressMode p_compress_mode, bool p_brace_syntax = false);
 
 	virtual int get_cursor_line() const override;
 	virtual int get_cursor_column() const override;

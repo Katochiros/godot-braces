@@ -140,7 +140,9 @@ Error GDScriptTokenizerBuffer::set_code_buffer(const Vector<uint8_t> &p_buffer) 
 	const uint8_t *buf = p_buffer.ptr();
 	ERR_FAIL_COND_V(p_buffer.size() < 12 || p_buffer[0] != 'G' || p_buffer[1] != 'D' || p_buffer[2] != 'S' || p_buffer[3] != 'C', ERR_INVALID_DATA);
 
-	int version = decode_uint32(&buf[4]);
+	uint32_t version = decode_uint32(&buf[4]);
+	brace_syntax = version & BRACE_SYNTAX_FLAG;
+	version &= ~BRACE_SYNTAX_FLAG;
 	ERR_FAIL_COND_V_MSG(version != TOKENIZER_VERSION, ERR_INVALID_DATA, "Binary GDScript is not compatible with this engine version.");
 
 	int decompressed_size = decode_uint32(&buf[8]);
@@ -237,7 +239,7 @@ Error GDScriptTokenizerBuffer::set_code_buffer(const Vector<uint8_t> &p_buffer) 
 	return OK;
 }
 
-Vector<uint8_t> GDScriptTokenizerBuffer::parse_code_string(const String &p_code, CompressMode p_compress_mode) {
+Vector<uint8_t> GDScriptTokenizerBuffer::parse_code_string(const String &p_code, CompressMode p_compress_mode, bool p_brace_syntax) {
 	HashMap<StringName, uint32_t> identifier_map;
 	HashMap<Variant, uint32_t> constant_map;
 	Vector<uint8_t> token_buffer;
@@ -247,6 +249,7 @@ Vector<uint8_t> GDScriptTokenizerBuffer::parse_code_string(const String &p_code,
 	GDScriptTokenizerText tokenizer;
 	tokenizer.set_source_code(p_code);
 	tokenizer.set_multiline_mode(true); // Ignore whitespace tokens.
+	tokenizer.set_brace_mode(p_brace_syntax);
 	Token current = tokenizer.scan();
 	int token_pos = 0;
 	int last_token_line = 0;
@@ -357,7 +360,7 @@ Vector<uint8_t> GDScriptTokenizerBuffer::parse_code_string(const String &p_code,
 	buf.write[1] = 'D';
 	buf.write[2] = 'S';
 	buf.write[3] = 'C';
-	encode_uint32(TOKENIZER_VERSION, &buf.write[4]);
+	encode_uint32(TOKENIZER_VERSION | (p_brace_syntax ? BRACE_SYNTAX_FLAG : 0u), &buf.write[4]);
 
 	switch (p_compress_mode) {
 		case COMPRESS_NONE:
@@ -412,6 +415,20 @@ void GDScriptTokenizerBuffer::pop_expression_indented_block() {
 }
 
 GDScriptTokenizer::Token GDScriptTokenizerBuffer::scan() {
+	if (brace_syntax) {
+		// Blocks are delimited by braces, so no whitespace tokens are needed.
+		if (current >= tokens.size()) {
+			Token eof;
+			eof.type = Token::TK_EOF;
+			eof.start_line = current_line;
+			eof.end_line = current_line;
+			return eof;
+		}
+		Token token = tokens[current++];
+		current_line = token.start_line;
+		return token;
+	}
+
 	// Add final newline.
 	if (current >= tokens.size() && !last_token_was_newline) {
 		Token newline;

@@ -539,6 +539,7 @@ Error GDScriptParser::parse_binary(const Vector<uint8_t> &p_binary, const String
 	}
 
 	tokenizer = buffer_tokenizer;
+	brace_mode = buffer_tokenizer->brace_syntax;
 
 	script_path = p_script_path.simplify_path();
 

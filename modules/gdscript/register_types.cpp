@@ -97,7 +97,7 @@ protected:
 	}
 
 	virtual void _export_file(const String &p_path, const String &p_type, const HashSet<String> &p_features) override {
-		if (p_path.get_extension() != "gd" || script_mode == EditorExportPreset::MODE_SCRIPT_TEXT) {
+		if (!GDScriptLanguage::is_source_extension(p_path.get_extension()) || script_mode == EditorExportPreset::MODE_SCRIPT_TEXT) {
 			return;
 		}
 
@@ -108,7 +108,7 @@ protected:
 
 		String source = String::utf8(reinterpret_cast<const char *>(file.ptr()), file.size());
 		GDScriptTokenizerBuffer::CompressMode compress_mode = script_mode == EditorExportPreset::MODE_SCRIPT_BINARY_TOKENS_COMPRESSED ? GDScriptTokenizerBuffer::COMPRESS_ZSTD : GDScriptTokenizerBuffer::COMPRESS_NONE;
-		file = GDScriptTokenizerBuffer::parse_code_string(source, compress_mode);
+		file = GDScriptTokenizerBuffer::parse_code_string(source, compress_mode, GDScriptParser::is_brace_syntax_path(p_path));
 		if (file.is_empty()) {
 			return;
 		}
